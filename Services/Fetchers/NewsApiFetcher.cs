@@ -29,7 +29,13 @@ namespace NewsAggregator.Services.Fetchers
 
             try
             {
-                var json = await _httpClient.GetStringAsync(url, ct);
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("User-Agent", "NewsAggregator/1.0");
+
+                var response = await _httpClient.SendAsync(request, ct);
+                response.EnsureSuccessStatusCode();
+
+                var json = await response.Content.ReadAsStringAsync(ct);
                 var data = JsonConvert.DeserializeObject<NewsApiResponse>(json);
 
                 if (data?.Articles == null) return Enumerable.Empty<Article>();
