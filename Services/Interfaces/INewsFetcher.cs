@@ -1,12 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using NewsAggregator.Models;
 
 namespace NewsAggregator.Services.Interfaces
 {
-    public class INewsFetcher
+    public interface INewsFetcher
     {
-        
+        Task<IEnumerable<Article>> FetchAsync(CancellationToken cancellationToken);
     }
 }
