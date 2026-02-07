@@ -9,16 +9,18 @@ namespace NewsAggregator.Services
     {
         private readonly AppDbContext _db;
         private readonly IEnumerable<INewsSourceFetcher> _fetchers;
+        private readonly ILogger<NewsAggregatorService> _logger;
 
-        public NewsAggregatorService(AppDbContext db, IEnumerable<INewsSourceFetcher> fetchers)
+        public NewsAggregatorService(AppDbContext db, IEnumerable<INewsSourceFetcher> fetchers, ILogger<NewsAggregatorService> logger)
         {
             _db = db;
             _fetchers = fetchers;
+            _logger = logger;
         }
 
         public async Task FetchAndStoreAsync(CancellationToken ct)
-        {
-            // 1) Fetch + dedupe by URL (avoid duplicates across sources)
+            {_logger.LogInformation("Starting news fetch cycle with {Count} fetchers", _fetchers.Count());
+
             var incomingByUrl = new Dictionary<string, Article>();
 
             foreach (var fetcher in _fetchers)
@@ -36,9 +38,14 @@ namespace NewsAggregator.Services
             }
 
             if (incomingByUrl.Count == 0)
+            {
+                _logger.LogWarning("No articles fetched from any source");
                 return;
+            }
 
-            // 2) Find which URLs already exist in DB (single query)
+            _logger.LogInformation("Fetched {Count} total articles (after deduplication)", incomingByUrl.Count);
+
+            // Find which URLs already exist in DB 
             var urls = incomingByUrl.Keys.ToList();
 
             var existingUrls = await _db.Articles
@@ -48,16 +55,21 @@ namespace NewsAggregator.Services
 
             var existingSet = existingUrls.ToHashSet();
 
-            // 3) Insert only new articles
+            // Insert only new articles
             var newArticles = incomingByUrl.Values
                 .Where(a => !existingSet.Contains(a.Url))
                 .ToList();
 
             if (newArticles.Count == 0)
+            {
+                _logger.LogInformation("No new articles to store (all already exist in database)");
                 return;
+            }
 
             await _db.Articles.AddRangeAsync(newArticles, ct);
             await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Stored {Count} new articles in database", newArticles.Count);
         }
     }
 }
