@@ -1,39 +1,63 @@
-// using NewsAggregator.Data;
-// using NewsAggregator.Models;
-// using NewsAggregator.Services.Fetchers;
-// using NewsAggregator.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using NewsAggregator.Data;
+using NewsAggregator.Models;
+using NewsAggregator.Services.Interfaces;
 
-// namespace NewsAggregator.Services
-// {
-//     public class NewsAggregatorService : INewsFetcher
-//     {
-//         private readonly AppDbContext _dbContext;
-//         private readonly RssNewsFetcher _rssFetcher;
-//         private readonly NewsApiFetcher _apiFetcher;
+namespace NewsAggregator.Services
+{
+    public class NewsAggregatorService
+    {
+        private readonly AppDbContext _db;
+        private readonly IEnumerable<INewsSourceFetcher> _fetchers;
 
-//         public NewsAggregatorService(AppDbContext dbContext, RssNewsFetcher rssFetcher, NewsApiFetcher apiFetcher)
-//         {
-//             _dbContext = dbContext;
-//             _rssFetcher = rssFetcher;
-//             _apiFetcher = apiFetcher;
-//         }
+        public NewsAggregatorService(AppDbContext db, IEnumerable<INewsSourceFetcher> fetchers)
+        {
+            _db = db;
+            _fetchers = fetchers;
+        }
 
-//         public async Task FetchAndStoreArticlesAsync()
-//         {
-//             var rssArticles = await _rssFetcher.FetchArticlesAsync();
-//             var apiArticles = await _apiFetcher.FetchArticlesAsync();
+        public async Task FetchAndStoreAsync(CancellationToken ct)
+        {
+            // 1) Fetch + dedupe by URL (avoid duplicates across sources)
+            var incomingByUrl = new Dictionary<string, Article>();
 
-//             var allArticles = rssArticles.Concat(apiArticles);
+            foreach (var fetcher in _fetchers)
+            {
+                var articles = await fetcher.FetchAsync(ct);
 
-//             foreach (var article in allArticles)
-//             {
-//                 if (!_dbContext.Articles.Any(a => a.Url == article.Url))
-//                 {
-//                     _dbContext.Articles.Add(article);
-//                 }
-//             }
+                foreach (var a in articles)
+                {
+                    if (string.IsNullOrWhiteSpace(a.Url))
+                        continue;
 
-//             await _dbContext.SaveChangesAsync();
-//         }
-//     }
-// }
+                    // keep the first article for each URL
+                    incomingByUrl.TryAdd(a.Url, a);
+                }
+            }
+
+            if (incomingByUrl.Count == 0)
+                return;
+
+            // 2) Find which URLs already exist in DB (single query)
+            var urls = incomingByUrl.Keys.ToList();
+
+            var existingUrls = await _db.Articles
+                .Where(x => urls.Contains(x.Url))
+                .Select(x => x.Url)
+                .ToListAsync(ct);
+
+            var existingSet = existingUrls.ToHashSet();
+
+            // 3) Insert only new articles
+            var newArticles = incomingByUrl.Values
+                .Where(a => !existingSet.Contains(a.Url))
+                .ToList();
+
+            if (newArticles.Count == 0)
+                return;
+
+            await _db.Articles.AddRangeAsync(newArticles, ct);
+            await _db.SaveChangesAsync(ct);
+        }
+    }
+}
