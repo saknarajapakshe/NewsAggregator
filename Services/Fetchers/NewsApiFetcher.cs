@@ -7,49 +7,50 @@ namespace NewsAggregator.Services.Fetchers
     public class NewsApiFetcher : INewsSourceFetcher
     {
         private readonly HttpClient _httpClient;
-        private readonly IConfiguration _configuration;
+        private readonly IConfiguration _config;
+        private readonly ILogger<NewsApiFetcher> _logger;
 
-        public NewsApiFetcher(HttpClient httpClient, IConfiguration configuration)
+        public NewsApiFetcher(HttpClient httpClient, IConfiguration config, ILogger<NewsApiFetcher> logger)
         {
             _httpClient = httpClient;
-            _configuration = configuration;
+            _config = config;
+            _logger = logger;
         }
 
-        public async Task<IEnumerable<Article>> FetchAsync(CancellationToken cancellationToken)
+        public async Task<IEnumerable<Article>> FetchAsync(CancellationToken ct)
         {
-            var apiKey = _configuration["NewsApi:ApiKey"];
-            var baseUrl = _configuration["NewsApi:BaseUrl"];
+            var apiKey = _config["NewsApi:ApiKey"];
+            var baseUrl = _config["NewsApi:BaseUrl"];
 
-            if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(baseUrl))
+            if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(baseUrl))
                 return Enumerable.Empty<Article>();
 
-            var requestUrl = $"{baseUrl}&apiKey={apiKey}";
+            var url = $"{baseUrl}?country=us&apiKey={apiKey}";
 
-            var response = await _httpClient.GetAsync(requestUrl, cancellationToken);
-            response.EnsureSuccessStatusCode();
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            var newsApiResponse = JsonConvert.DeserializeObject<NewsApiResponse>(json);
-
-            if (newsApiResponse?.Articles == null)
-                return Enumerable.Empty<Article>();
-
-            var articles = new List<Article>();
-
-            foreach (var item in newsApiResponse.Articles)
+            try
             {
-                articles.Add(new Article
-                {
-                    Title = item.Title!.Trim(),
-                    Url = item.Url!.Trim(),
-                    Description = item.Description?.Trim(),
-                    Source = item.Source?.Name ?? "Unknown Source",
-                    PublishedAt = item.PublishedAt?.ToUniversalTime() ?? DateTime.UtcNow
-                });
-            }
+                var json = await _httpClient.GetStringAsync(url, ct);
+                var data = JsonConvert.DeserializeObject<NewsApiResponse>(json);
 
-            return articles;
+                if (data?.Articles == null) return Enumerable.Empty<Article>();
+
+                return data.Articles
+                    .Where(a => !string.IsNullOrWhiteSpace(a.Title) && !string.IsNullOrWhiteSpace(a.Url))
+                    .Select(a => new Article
+                    {
+                        Title = a.Title!.Trim(),
+                        Url = a.Url!.Trim(),
+                        Description = a.Description?.Trim(),
+                        Source = a.Source?.Name?.Trim() ?? "Unknown Source",
+                        PublishedAt = a.PublishedAt?.ToUniversalTime() ?? DateTime.UtcNow
+                    })
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "NewsAPI fetch failed");
+                return Enumerable.Empty<Article>();
+            }
         }
     }
 }
