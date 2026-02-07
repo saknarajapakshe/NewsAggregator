@@ -4,7 +4,7 @@ using NewsAggregator.Services.Interfaces;
 
 namespace NewsAggregator.Services.Fetchers
 {
-    public class RssNewsFetcher : INewsFetcher
+    public class RssNewsFetcher : INewsSourceFetcher
     {
         private const string RssUrl = "https://feeds.bbci.co.uk/news/rss.xml";
 
