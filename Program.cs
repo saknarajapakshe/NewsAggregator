@@ -39,6 +39,7 @@ builder.Services.AddHttpClient<RssNewsFetcher>(c =>
 builder.Services.AddHttpClient<NewsApiFetcher>(c =>
 {
     c.Timeout = TimeSpan.FromSeconds(10);
+    c.DefaultRequestHeaders.Add("User-Agent", "NewsAggregator/1.0");
 }).AddPolicyHandler(retryPolicy);
 
 // Register fetchers as sources
