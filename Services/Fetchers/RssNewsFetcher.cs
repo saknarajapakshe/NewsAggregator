@@ -39,19 +39,9 @@ namespace NewsAggregator.Services.Fetchers
                 _logger.LogInformation("Successfully fetched {Count} articles from BBC RSS", articles.Count);
                 return articles;
             }
-            catch (HttpRequestException ex)
+             catch (Exception ex)
             {
-                _logger.LogError(ex, "HTTP error fetching from BBC RSS");
-                return Enumerable.Empty<Article>();
-            }
-            catch (System.Xml.XmlException ex)
-            {
-                _logger.LogError(ex, "Error parsing BBC RSS XML");
-                return Enumerable.Empty<Article>();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error fetching from BBC RSS");
+                _logger.LogError(ex, "BBC RSS fetch failed");
                 return Enumerable.Empty<Article>();
             }
         }
