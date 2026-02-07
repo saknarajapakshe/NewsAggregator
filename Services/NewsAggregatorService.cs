@@ -19,7 +19,8 @@ namespace NewsAggregator.Services
         }
 
         public async Task FetchAndStoreAsync(CancellationToken ct)
-            {_logger.LogInformation("Starting news fetch cycle with {Count} fetchers", _fetchers.Count());
+        {
+            _logger.LogInformation("Starting news fetch cycle with {Count} fetchers", _fetchers.Count());
 
             var incomingByUrl = new Dictionary<string, Article>();
 
