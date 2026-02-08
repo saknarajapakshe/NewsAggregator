@@ -19,10 +19,10 @@ namespace NewsAggregator.BackgroundJobs
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // 🔹 Run once immediately on startup
+            // Run once on startup
             await RunOnceAsync(stoppingToken);
 
-            // 🔹 Then run every 5 minutes
+            // After that, run every 5 minutes
             using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
 
             while (await timer.WaitForNextTickAsync(stoppingToken))
