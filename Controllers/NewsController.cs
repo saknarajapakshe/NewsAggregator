@@ -17,12 +17,24 @@ namespace NewsAggregator.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Get([FromQuery] int limit = 20, CancellationToken ct = default)
+        public async Task<IActionResult> Get(
+            [FromQuery] int limit = 20,
+            [FromQuery] DateTime? cursor = null,
+            CancellationToken ct = default)
         {
             limit = Math.Clamp(limit, 1, 100);
 
-            var items = await _db.Articles
+            var query = _db.Articles.AsNoTracking();
+
+            // Cursor pagination
+            if (cursor.HasValue)
+            {
+                query = query.Where(a => a.PublishedAt < cursor.Value);
+            }
+
+            var items = await query
                 .OrderByDescending(a => a.PublishedAt)
+                .ThenByDescending(a => a.Id) //when multiple articles have the same PublishedAt, order by Id to ensure consistent pagination
                 .Take(limit)
                 .Select(a => new ArticleResponseDto
                 {
@@ -34,7 +46,13 @@ namespace NewsAggregator.Controllers
                 })
                 .ToListAsync(ct);
 
-            return Ok(items);
+            var nextCursor = items.Count > 0 ? items[^1].PublishedAt : (DateTime?)null;
+
+            return Ok(new
+            {
+                items,
+                nextCursor
+            });
         }
     }
 }
