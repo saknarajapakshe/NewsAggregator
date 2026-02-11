@@ -23,12 +23,18 @@ namespace NewsAggregator.Services
             _logger.LogInformation("Starting news fetch cycle with {Count} fetchers", _fetchers.Count());
 
             var incomingByUrl = new Dictionary<string, Article>();
+            var fetcherStats = new Dictionary<string, int>();
 
             foreach (var fetcher in _fetchers)
             {
+                var fetcherName = fetcher.GetType().Name; // Get fetcher name
                 var articles = await fetcher.FetchAsync(ct);
+                var articlesList = articles.ToList();
 
-                foreach (var a in articles)
+                fetcherStats[fetcherName] = articlesList.Count; // Track count
+                _logger.LogInformation("{FetcherName} fetched {Count} articles", fetcherName, articlesList.Count);
+
+                foreach (var a in articlesList)
                 {
                     if (string.IsNullOrWhiteSpace(a.Url))
                         continue;
@@ -37,6 +43,9 @@ namespace NewsAggregator.Services
                     incomingByUrl.TryAdd(a.Url, a);
                 }
             }
+
+            // Log summary
+            _logger.LogInformation("Fetch summary: {Stats}", string.Join(", ", fetcherStats.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
 
             if (incomingByUrl.Count == 0)
             {
